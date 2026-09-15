@@ -7,7 +7,7 @@ import { SheetTabs } from './components/SheetTabs';
 import { SearchControl } from './components/SearchControl';
 import { ResultsTable } from './components/ResultsTable';
 import { DetailModal } from './components/DetailModal';
-import { FileSpreadsheet, ShieldCheck, PhoneCall, Sparkles } from 'lucide-react';
+import { FileSpreadsheet } from 'lucide-react';
 
 export default function App() {
   const [workbookData, setWorkbookData] = useState<ExcelWorkbookData | null>(null);
@@ -161,76 +161,70 @@ export default function App() {
 
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
-      {/* Top Application Bar */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-              <FileSpreadsheet className="w-5 h-5" />
+    <div className="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
+      {/* Top Application Bar - Compact & Clean */}
+      <header className="bg-white border-b border-slate-200 shrink-0 z-30 shadow-2xs">
+        <div className="max-w-7xl mx-auto px-3 sm:px-5 py-1.5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+              <FileSpreadsheet className="w-3.5 h-3.5" />
             </div>
-            <div>
-              <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-tight">
-                Excel Column Search & Matcher
-              </h1>
-              <p className="text-xs text-slate-500 font-medium">
-                Multi-Sheet Support • NRC Last 6 Digits • Phone Last 6+ Digits • Fuzzy Match
-              </p>
-            </div>
-          </div>
-
-          {/* Feature Badges */}
-          <div className="hidden md:flex items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-medium border border-indigo-100">
-              <ShieldCheck className="w-3.5 h-3.5" /> NRC 6 Digits
-            </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
-              <PhoneCall className="w-3.5 h-3.5" /> Phone 6+ Digits
-            </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 font-medium border border-amber-100">
-              <Sparkles className="w-3.5 h-3.5" /> Fuzzy Match
-            </span>
+            <h1 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight">
+              Excel Column Search & Matcher
+            </h1>
           </div>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
+      <main
+        className={
+          workbookData
+            ? 'flex-1 max-w-7xl w-full mx-auto px-2.5 sm:px-5 py-2 flex flex-col gap-2'
+            : 'flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-4'
+        }
+      >
         {/* File Upload Section */}
-        <FileUploader
-          workbookData={workbookData}
-          onWorkbookLoaded={handleWorkbookLoaded}
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-        />
+        <div className="shrink-0">
+          <FileUploader
+            workbookData={workbookData}
+            onWorkbookLoaded={handleWorkbookLoaded}
+            isLoading={isLoading}
+            setIsLoading={setIsLoading}
+          />
+        </div>
 
         {/* Multi-Sheet Tab Navigation */}
         {workbookData && workbookData.sheetNames.length > 0 && (
-          <SheetTabs
-            sheetNames={workbookData.sheetNames}
-            activeSheetName={activeSheetName}
-            sheets={workbookData.sheets}
-            onSelectSheet={handleSelectSheet}
-          />
+          <div className="shrink-0">
+            <SheetTabs
+              sheetNames={workbookData.sheetNames}
+              activeSheetName={activeSheetName}
+              sheets={workbookData.sheets}
+              onSelectSheet={handleSelectSheet}
+            />
+          </div>
         )}
 
         {/* Search Controls (Dropdown & Input & Rule explanation) */}
         {currentSheet && (
           <>
-            <SearchControl
-              columns={currentSheet.columns}
-              columnInfos={currentSheet.columnInfos}
-              selectedColumn={selectedColumn}
-              onSelectColumn={handleSelectColumn}
-              activeMode={activeMode}
-              onModeChange={setActiveMode}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              totalRows={currentSheet.rows.length}
-              matchedCount={matchResults.length}
-            />
+            <div className="shrink-0">
+              <SearchControl
+                columns={currentSheet.columns}
+                columnInfos={currentSheet.columnInfos}
+                selectedColumn={selectedColumn}
+                onSelectColumn={handleSelectColumn}
+                activeMode={activeMode}
+                onModeChange={setActiveMode}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                totalRows={currentSheet.rows.length}
+                matchedCount={matchResults.length}
+              />
+            </div>
 
-            {/* Results Table */}
+            {/* Results Table with Permanently Frozen Header */}
             <ResultsTable
               columns={currentSheet.columns}
               results={matchResults}
@@ -252,11 +246,11 @@ export default function App() {
         selectedColumn={selectedColumn}
       />
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-3.5 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Excel Column Search & Matcher • Multi-Tab Worksheet Support</span>
-          <span className="text-slate-400">Supports Myanmar (၀-၉) & English (0-9) Numeral Normalization</span>
+      {/* Compact Footer */}
+      <footer className="border-t border-slate-200 bg-white py-1 px-3 text-center text-[10px] text-slate-400 shrink-0">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <span>Excel Column Search & Matcher</span>
+          <span>Myanmar (၀-၉) & English (0-9) Normalization</span>
         </div>
       </footer>
     </div>

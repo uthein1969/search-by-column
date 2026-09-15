@@ -11,6 +11,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '12/ma ba na(C)130288',
     'Owner Mobile': '09401788812',
     'Merchant Name (Eng)': '100 Power Trading Co.,Ltd',
+    'Transaction Amount': '300,000.00',
   },
   {
     'Merchant Number': '20300000149149',
@@ -21,6 +22,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '5/ka tha na(C)125488',
     'Owner Mobile': '09664540527',
     'Merchant Name (Eng)': '100 Power 4-NYU',
+    'Transaction Amount': '3,000.00',
   },
   {
     'Merchant Number': '20300000148148',
@@ -31,6 +33,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '9/ma ka na(C)081831',
     'Owner Mobile': '09988090111',
     'Merchant Name (Eng)': '100 Power 1-NPT',
+    'Transaction Amount': '300.00',
   },
   {
     'Merchant Number': '20300000147147',
@@ -41,6 +44,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '12/ma ba na(C)130288',
     'Owner Mobile': '09401788811',
     'Merchant Name (Eng)': '100 Power Trading Co., Ltd',
+    'Transaction Amount': '150,000.00',
   },
   {
     'Merchant Number': '20300000146146',
@@ -51,6 +55,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '1/ba ma na(C)083041',
     'Owner Mobile': '09681976325',
     'Merchant Name (Eng)': '100 Power 2 -YMT',
+    'Transaction Amount': '50,000.00',
   },
   {
     'Merchant Number': '20300000145145',
@@ -61,6 +66,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '12/ra pa tha(C)038763',
     'Owner Mobile': '09791824447',
     'Merchant Name (Eng)': 'Ma Ma Moe',
+    'Transaction Amount': '300,000.00',
   },
   {
     'Merchant Number': '20300000144144',
@@ -71,6 +77,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '12/ra pa tha(C)119500',
     'Owner Mobile': '09401599072',
     'Merchant Name (Eng)': 'Cho Chit',
+    'Transaction Amount': '25,000.00',
   },
   {
     'Merchant Number': '20300000137137',
@@ -81,6 +88,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '12/ra pa tha(C)054079',
     'Owner Mobile': '09775447442',
     'Merchant Name (Eng)': 'Ko Zay',
+    'Transaction Amount': '80,000.00',
   },
   {
     'Merchant Number': '20300000136136',
@@ -91,6 +99,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '12/a sa na(C)067189',
     'Owner Mobile': '09421039218',
     'Merchant Name (Eng)': 'Three Seasons',
+    'Transaction Amount': '1,200,000.00',
   },
   {
     'Merchant Number': '20300000135135',
@@ -101,6 +110,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '12/ka kha ka(C)072113',
     'Owner Mobile': '09422909282',
     'Merchant Name (Eng)': 'Aung Myint Mo',
+    'Transaction Amount': '4,500.00',
   },
   {
     'Merchant Number': '20300000134134',
@@ -111,6 +121,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '12/ra pa tha(C)067311',
     'Owner Mobile': '09448098913',
     'Merchant Name (Eng)': 'May Myanmar',
+    'Transaction Amount': '500,000.00',
   },
   {
     'Merchant Number': '20300000133133',
@@ -121,6 +132,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '8/ma ma na(C)204441',
     'Owner Mobile': '09425677674',
     'Merchant Name (Eng)': 'Mr.Boss',
+    'Transaction Amount': '12,000.00',
   },
   {
     'Merchant Number': '20300000132132',
@@ -131,6 +143,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '12/ra pa tha(C)058361',
     'Owner Mobile': '09680728588',
     'Merchant Name (Eng)': 'Pan Taw Win',
+    'Transaction Amount': '300,000.00',
   },
   {
     'Merchant Number': '20300000131131',
@@ -141,6 +154,7 @@ export const SAMPLE_MERCHANT_REGISTRATION_ROWS: Record<string, any>[] = [
     'Owner NRC/ Passport': '8/ra sa ka(C)168154',
     'Owner Mobile': '09760148595',
     'Merchant Name (Eng)': 'Moe Kaung Kin Store',
+    'Transaction Amount': '75,000.00',
   },
 ];
 

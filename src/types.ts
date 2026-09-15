@@ -1,4 +1,4 @@
-export type SearchMode = 'nrc' | 'phone' | 'fuzzy';
+export type SearchMode = 'nrc' | 'phone' | 'amount' | 'fuzzy';
 
 export const ALL_SHEETS_TAB_ID = '__ALL_SHEETS__';
 export const ALL_COLUMNS_KEY = '__ALL_COLUMNS__';

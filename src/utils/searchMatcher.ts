@@ -3,6 +3,8 @@ import {
   convertMyanmarToEnglishDigits,
   extractDigits,
   normalizePhoneNumber,
+  parseAmount,
+  parseAmountQuery,
 } from './numberUtils';
 
 /**
@@ -10,6 +12,28 @@ import {
  */
 export function detectColumnMode(columnName: string): SearchMode {
   const lower = columnName.toLowerCase().trim();
+
+  // Check for Amount / Currency / Balance / Price / Total / Fee
+  if (
+    lower.includes('amount') ||
+    lower.includes('amt') ||
+    lower.includes('price') ||
+    lower.includes('balance') ||
+    lower.includes('total') ||
+    lower.includes('fee') ||
+    lower.includes('cost') ||
+    lower.includes('charge') ||
+    lower.includes('salary') ||
+    lower.includes('payment') ||
+    lower.includes('deposit') ||
+    lower.includes('withdraw') ||
+    lower.includes('sum') ||
+    lower.includes('ပမာဏ') ||
+    lower.includes('ငွေပမာဏ') ||
+    lower.includes('ကျသင့်ငွေ')
+  ) {
+    return 'amount';
+  }
 
   // Check for Phone
   if (
@@ -434,6 +458,113 @@ export function matchFuzzy(cellValue: any, query: string, minThreshold: number =
 }
 
 /**
+ * Executes Numeric Amount comparison matching:
+ * Supports operators: >, >=, <, <=, =, !=, and Range (e.g. 1000 - 50000).
+ * Defaults to exact numeric equality '=' when user enters plain number (e.g. 300000).
+ */
+export function matchAmount(
+  cellValue: any,
+  query: string
+): { matched: boolean; score: number; reason: string; formattedVal?: string } {
+  if (cellValue === null || cellValue === undefined) {
+    return { matched: false, score: 0, reason: 'Empty' };
+  }
+
+  const q = query.trim();
+  if (!q) {
+    return { matched: true, score: 100, reason: 'All' };
+  }
+
+  const cellNum = parseAmount(cellValue);
+  const parsedQuery = parseAmountQuery(q);
+
+  // If query could not be parsed as an amount query or operator,
+  // fallback gracefully to fuzzy string matching (e.g. searching text in amount column)
+  if (!parsedQuery.isValid) {
+    const fuzzy = matchFuzzy(cellValue, q);
+    return {
+      matched: fuzzy.matched,
+      score: fuzzy.score,
+      reason: fuzzy.reason,
+      formattedVal: String(cellValue),
+    };
+  }
+
+  // If cell has no numeric value, it cannot match numeric amount
+  if (cellNum === null) {
+    return { matched: false, score: 0, reason: 'Non-numeric cell' };
+  }
+
+  const formattedCell = cellNum.toLocaleString(undefined, {
+    minimumFractionDigits: Number.isInteger(cellNum) ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+
+  const target = parsedQuery.value;
+  const formattedTarget = target.toLocaleString(undefined, {
+    minimumFractionDigits: Number.isInteger(target) ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+
+  const EPSILON = 0.0001;
+  let matched = false;
+  let reason = '';
+
+  switch (parsedQuery.operator) {
+    case '>':
+      matched = cellNum > target + EPSILON;
+      reason = `Amount > ${formattedTarget} (${formattedCell})`;
+      break;
+    case '>=':
+      matched = cellNum >= target - EPSILON;
+      reason = `Amount ≥ ${formattedTarget} (${formattedCell})`;
+      break;
+    case '<':
+      matched = cellNum < target - EPSILON;
+      reason = `Amount < ${formattedTarget} (${formattedCell})`;
+      break;
+    case '<=':
+      matched = cellNum <= target + EPSILON;
+      reason = `Amount ≤ ${formattedTarget} (${formattedCell})`;
+      break;
+    case '!=':
+      matched = Math.abs(cellNum - target) > EPSILON;
+      reason = `Amount ≠ ${formattedTarget} (${formattedCell})`;
+      break;
+    case 'range':
+      const target2 = parsedQuery.value2 ?? target;
+      const formattedTarget2 = target2.toLocaleString(undefined, {
+        minimumFractionDigits: Number.isInteger(target2) ? 0 : 2,
+        maximumFractionDigits: 2,
+      });
+      matched = cellNum >= target - EPSILON && cellNum <= target2 + EPSILON;
+      reason = `Amount [${formattedTarget} - ${formattedTarget2}] (${formattedCell})`;
+      break;
+    case '=':
+    default:
+      matched = Math.abs(cellNum - target) < EPSILON;
+      reason = `Amount = ${formattedTarget} (Exact: ${formattedCell})`;
+      break;
+  }
+
+  if (matched) {
+    return {
+      matched: true,
+      score: 100,
+      reason,
+      formattedVal: formattedCell,
+    };
+  }
+
+  return {
+    matched: false,
+    score: 0,
+    reason: `Amount does not match ${q}`,
+    formattedVal: formattedCell,
+  };
+}
+
+/**
  * Unified row matcher according to selected column and mode.
  * Supports ALL_COLUMNS_KEY for searching across all columns in a row.
  * Supports cross-sheet fallback if the selected column exists under a different header name.
@@ -459,6 +590,16 @@ export function evaluateRowMatch(
 
   // Helper to match a specific cell value with given mode
   const testCell = (colName: string, val: any, colMode: SearchMode) => {
+    if (colMode === 'amount') {
+      const res = matchAmount(val, query);
+      return {
+        matched: res.matched,
+        score: res.score,
+        reason: res.reason,
+        highlightText: res.formattedVal,
+        colName,
+      };
+    }
     if (colMode === 'nrc') {
       const res = matchNRC(val, query);
       return {
@@ -568,10 +709,12 @@ export function evaluateRowMatch(
 }
 
 function activeModeCheck(colMode: SearchMode, activeMode: SearchMode, query: string): SearchMode {
-  // If active mode is explicitly set to NRC or Phone, prioritize that if query matches pattern
-  const digits = extractDigits(query);
+  // If active mode is explicitly set to Amount, NRC or Phone, prioritize that
+  if (colMode === 'amount') return 'amount';
   if (colMode === 'nrc') return 'nrc';
   if (colMode === 'phone') return 'phone';
+  if (activeMode === 'amount') return 'amount';
+  const digits = extractDigits(query);
   if (digits.length >= 6 && activeMode === 'nrc') return 'nrc';
   if (digits.length >= 6 && activeMode === 'phone') return 'phone';
   return colMode;
