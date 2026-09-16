@@ -13,6 +13,19 @@ import {
 export function detectColumnMode(columnName: string): SearchMode {
   const lower = columnName.toLowerCase().trim();
 
+  // Exclude Currency code columns (e.g. OPER_AMOUNT_CUR, STTL_AMOUNT_CUR) from amount mode
+  if (
+    lower.includes('_cur') ||
+    lower.includes('cur_') ||
+    lower.endsWith('_cur') ||
+    lower.includes('currency') ||
+    lower.includes('_ccy') ||
+    lower === 'cur' ||
+    /\bcur\b/i.test(columnName)
+  ) {
+    return 'fuzzy';
+  }
+
   // Check for Amount / Currency / Balance / Price / Total / Fee / Minor Units
   if (
     lower.includes('amount') ||

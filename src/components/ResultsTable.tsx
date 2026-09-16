@@ -159,6 +159,31 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
     if (!colName) return false;
     const lower = colName.toLowerCase().trim();
 
+    // 0. Definite CURRENCY CODE exclusion:
+    // Columns containing '_cur', 'cur_', currency codes/names (e.g. OPER_AMOUNT_CUR, STTL_AMOUNT_CUR, CURRENCY)
+    // are currency identifiers (e.g. 104 = MMK, 840 = USD) and must NEVER be totaled.
+    if (
+      lower.includes('_cur') ||
+      lower.includes('cur_') ||
+      lower.endsWith('_cur') ||
+      lower.endsWith('-cur') ||
+      lower.endsWith('.cur') ||
+      lower.includes('_curr') ||
+      lower.includes('curr_') ||
+      lower.includes('currency') ||
+      lower.includes('_ccy') ||
+      lower.includes('ccy_') ||
+      lower === 'cur' ||
+      lower === 'curr' ||
+      lower === 'ccy' ||
+      /\bcur\b/i.test(colName) ||
+      /\bcurr\b/i.test(colName) ||
+      /\bccy\b/i.test(colName) ||
+      /\bcurrency\b/i.test(colName)
+    ) {
+      return false;
+    }
+
     // 1. Definite NON-amount column patterns:
     // Dates, Times, Timestamps
     if (
