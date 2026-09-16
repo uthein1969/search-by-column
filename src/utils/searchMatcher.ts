@@ -13,7 +13,7 @@ import {
 export function detectColumnMode(columnName: string): SearchMode {
   const lower = columnName.toLowerCase().trim();
 
-  // Check for Amount / Currency / Balance / Price / Total / Fee
+  // Check for Amount / Currency / Balance / Price / Total / Fee / Minor Units
   if (
     lower.includes('amount') ||
     lower.includes('amt') ||
@@ -28,6 +28,9 @@ export function detectColumnMode(columnName: string): SearchMode {
     lower.includes('deposit') ||
     lower.includes('withdraw') ||
     lower.includes('sum') ||
+    lower.startsWith('add_ampr') ||
+    lower.includes('ampr') ||
+    lower.endsWith('_val') ||
     lower.includes('ပမာဏ') ||
     lower.includes('ငွေပမာဏ') ||
     lower.includes('ကျသင့်ငွေ')
@@ -35,13 +38,16 @@ export function detectColumnMode(columnName: string): SearchMode {
     return 'amount';
   }
 
-  // Check for Phone
+  // Check for Phone / Card / Token / Refnum digits
   if (
     lower.includes('phone') ||
     lower.includes('mobile') ||
     lower.includes('tel') ||
     lower.includes('ph no') ||
     lower.includes('ph_no') ||
+    lower.includes('card') ||
+    lower.includes('token') ||
+    lower.includes('refnum') ||
     lower.includes('ဖုန်း') ||
     lower === 'ph'
   ) {
@@ -542,8 +548,16 @@ export function matchAmount(
       break;
     case '=':
     default:
-      matched = Math.abs(cellNum - target) < EPSILON;
-      reason = `Amount = ${formattedTarget} (Exact: ${formattedCell})`;
+      if (Math.abs(cellNum - target) < EPSILON) {
+        matched = true;
+        reason = `Amount = ${formattedTarget} (Exact: ${formattedCell})`;
+      } else if (Math.abs(cellNum / 100 - target) < EPSILON) {
+        matched = true;
+        reason = `Amount = ${formattedTarget} (Matched raw minor unit: ${formattedCell})`;
+      } else if (Math.abs(cellNum - target / 100) < EPSILON) {
+        matched = true;
+        reason = `Amount = ${formattedTarget} (Matched currency unit: ${formattedCell})`;
+      }
       break;
   }
 

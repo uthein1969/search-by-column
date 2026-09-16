@@ -1,6 +1,6 @@
 {
   "name": "Excel Column Search & Matcher",
-  "description": "Search Excel records by selecting columns with dedicated Amount (>, <, =), NRC last-6-digits, Phone last-6-digits, and fuzzy text matching.",
+  "description": "Search and match Excel, CSV, and Merchant Settlement XML records with dedicated Amount (>, <, =), NRC, Phone last-6-digits, and full export capabilities.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

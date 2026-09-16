@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { MatchResult, SearchMode, ALL_SHEETS_TAB_ID, ALL_COLUMNS_KEY } from '../types';
-import { Download, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CheckCircle2, Layers } from 'lucide-react';
+import { Download, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CheckCircle2, Layers, FileSpreadsheet, FileText, ChevronDown, FileCode } from 'lucide-react';
 
 interface ResultsTableProps {
   columns: string[];
+  allRows?: Record<string, any>[];
   results: MatchResult[];
   selectedColumn: string;
   activeMode: SearchMode;
@@ -16,6 +17,7 @@ interface ResultsTableProps {
 
 export const ResultsTable: React.FC<ResultsTableProps> = ({
   columns,
+  allRows = [],
   results,
   selectedColumn,
   activeMode,
@@ -26,7 +28,24 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [includeMatchAudit, setIncludeMatchAudit] = useState(false);
+  const [includeRowNumber, setIncludeRowNumber] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
+
+  // Close export menu on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    if (showExportMenu) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showExportMenu]);
 
   // Reset page and scroll to top whenever search query, active column, or active sheet changes
   useEffect(() => {
@@ -71,6 +90,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
 
   const isAllSheets = activeSheetName === ALL_SHEETS_TAB_ID;
   const displayColumns = columns.filter((c) => c !== ALL_COLUMNS_KEY && !c.startsWith('_'));
+  const totalAllRowsCount = allRows && allRows.length > 0 ? allRows.length : results.length;
 
   const totalPages = Math.max(1, Math.ceil(results.length / pageSize));
   // Guarantee validPage is always within bounds [1, totalPages]
@@ -106,36 +126,65 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
   };
   const pageNumbers = getPageNumbers();
 
-  const exportToExcel = () => {
+  const exportData = (format: 'xlsx' | 'csv', scope: 'filtered' | 'all') => {
     try {
-      const exportRows = results.map((item, idx) => {
-        const cleanRow: Record<string, any> = {};
-        for (const [key, val] of Object.entries(item.row)) {
-          if (!key.startsWith('_')) {
-            cleanRow[key] = val;
-          }
-        }
+      setShowExportMenu(false);
+      const isScopeAll = scope === 'all' && allRows && allRows.length > 0;
+      const rowsSource = isScopeAll
+        ? allRows.map((r, idx) => {
+            const cleanRow: Record<string, any> = {};
+            for (const [key, val] of Object.entries(r)) {
+              if (!key.startsWith('_')) {
+                cleanRow[key] = val;
+              }
+            }
+            return {
+              ...(includeRowNumber ? { 'No': idx + 1 } : {}),
+              ...(isAllSheets ? { 'Worksheet_Source': r._sheetName || 'Sheet' } : {}),
+              ...cleanRow,
+            };
+          })
+        : results.map((item, idx) => {
+            const cleanRow: Record<string, any> = {};
+            for (const [key, val] of Object.entries(item.row)) {
+              if (!key.startsWith('_')) {
+                cleanRow[key] = val;
+              }
+            }
+            return {
+              ...(includeRowNumber ? { 'No': idx + 1 } : {}),
+              ...(isAllSheets ? { 'Worksheet_Source': item.row._sheetName || item.sheetName || 'Sheet' } : {}),
+              ...cleanRow,
+              ...(includeMatchAudit
+                ? {
+                    'Match_Verification': item.matchReason || 'Matched',
+                    'Match_Score_Percent': item.score,
+                  }
+                : {}),
+            };
+          });
 
-        return {
-          'No': idx + 1,
-          ...(isAllSheets ? { 'Worksheet_Source': item.row._sheetName || item.sheetName || 'Sheet' } : {}),
-          ...cleanRow,
-          'Match_Verification': item.matchReason || 'Matched',
-          'Match_Score_Percent': item.score,
-        };
-      });
+      if (rowsSource.length === 0) return;
 
-      const worksheet = XLSX.utils.json_to_sheet(exportRows);
+      const worksheet = XLSX.utils.json_to_sheet(rowsSource);
       const workbook = XLSX.utils.book_new();
-      const sheetTitle = isAllSheets ? 'All_Sheets' : activeSheetName;
-      XLSX.utils.book_append_sheet(workbook, worksheet, sheetTitle.slice(0, 31));
+      const sheetTitle = (isAllSheets ? 'All_Sheets' : activeSheetName).slice(0, 31);
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetTitle);
 
       const cleanFileName = fileName.replace(/\.[^/.]+$/, '');
-      XLSX.writeFile(workbook, `${cleanFileName}_${sheetTitle}_Filtered_Results.xlsx`);
+      const suffix = isScopeAll ? 'All_Records' : 'Filtered_Results';
+
+      if (format === 'xlsx') {
+        XLSX.writeFile(workbook, `${cleanFileName}_${sheetTitle}_${suffix}.xlsx`);
+      } else {
+        XLSX.writeFile(workbook, `${cleanFileName}_${sheetTitle}_${suffix}.csv`, { bookType: 'csv' });
+      }
     } catch (err) {
       console.error('Export failed', err);
     }
   };
+
+  const exportToExcel = () => exportData('xlsx', 'filtered');
 
   // Cell highlight renderer
   const renderCellContent = (col: string, val: any, item: MatchResult) => {
@@ -252,16 +301,138 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
             </div>
           )}
 
-          <button
-            id="btn-export-excel"
-            type="button"
-            onClick={exportToExcel}
-            disabled={results.length === 0}
-            className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-medium rounded-md transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
-          >
-            <Download className="w-3 h-3" />
-            <span>Export</span>
-          </button>
+          {/* Export Button & Menu */}
+          <div className="relative inline-flex items-center rounded-md shadow-2xs" ref={exportMenuRef}>
+            <button
+              id="btn-export-excel"
+              type="button"
+              onClick={exportToExcel}
+              disabled={results.length === 0}
+              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-semibold rounded-l-md transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Export filtered records to Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Export Excel</span>
+            </button>
+            <button
+              id="btn-export-dropdown-toggle"
+              type="button"
+              onClick={() => setShowExportMenu((prev) => !prev)}
+              disabled={results.length === 0}
+              className="px-1.5 py-1 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs rounded-r-md border-l border-emerald-800/40 transition-colors flex items-center cursor-pointer"
+              title="More export options (CSV, All rows)"
+            >
+              <ChevronDown className="w-3 h-3" />
+            </button>
+
+            {showExportMenu && (
+              <div
+                id="export-options-dropdown"
+                className="absolute right-0 top-full mt-1 w-64 bg-white rounded-lg shadow-xl border border-slate-200 py-1.5 z-50 text-xs"
+              >
+                <div className="px-3 py-1 text-[10px] font-bold uppercase text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                  <span>Export Options</span>
+                  <span className="text-[9px] font-mono text-emerald-600 bg-emerald-50 px-1 py-0.2 rounded">
+                    {displayColumns.length} Cols
+                  </span>
+                </div>
+
+                {/* Column format preferences */}
+                <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 space-y-1">
+                  <div className="text-[10px] font-semibold text-slate-500">
+                    Columns to Include:
+                  </div>
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-slate-900 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={includeMatchAudit}
+                      onChange={(e) => setIncludeMatchAudit(e.target.checked)}
+                      className="rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 w-3 h-3"
+                    />
+                    <span>Include Match Verification & Score</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-slate-900 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={includeRowNumber}
+                      onChange={(e) => setIncludeRowNumber(e.target.checked)}
+                      className="rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 w-3 h-3"
+                    />
+                    <span>Include "No" Index Column</span>
+                  </label>
+                  <div className="text-[9px] text-slate-400 pt-0.5">
+                    {!includeMatchAudit && !includeRowNumber
+                      ? `✓ Clean export (${displayColumns.length} original columns only)`
+                      : `+ Added metadata columns`}
+                  </div>
+                </div>
+
+                {/* Excel Section */}
+                <button
+                  type="button"
+                  onClick={() => exportData('xlsx', 'filtered')}
+                  className="w-full text-left px-3 py-1.5 hover:bg-emerald-50 text-slate-700 flex items-center justify-between gap-2 cursor-pointer"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Excel (.xlsx) - Filtered</span>
+                  </span>
+                  <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">
+                    {results.length}
+                  </span>
+                </button>
+
+                {allRows && allRows.length > results.length && (
+                  <button
+                    type="button"
+                    onClick={() => exportData('xlsx', 'all')}
+                    className="w-full text-left px-3 py-1.5 hover:bg-emerald-50 text-slate-700 flex items-center justify-between gap-2 cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Excel (.xlsx) - All Rows</span>
+                    </span>
+                    <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">
+                      {totalAllRowsCount}
+                    </span>
+                  </button>
+                )}
+
+                <div className="my-1 border-t border-slate-100" />
+
+                {/* CSV Section */}
+                <button
+                  type="button"
+                  onClick={() => exportData('csv', 'filtered')}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center justify-between gap-2 cursor-pointer"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-slate-600" />
+                    <span>CSV (.csv) - Filtered</span>
+                  </span>
+                  <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">
+                    {results.length}
+                  </span>
+                </button>
+
+                {allRows && allRows.length > results.length && (
+                  <button
+                    type="button"
+                    onClick={() => exportData('csv', 'all')}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center justify-between gap-2 cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-slate-600" />
+                      <span>CSV (.csv) - All Rows</span>
+                    </span>
+                    <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">
+                      {totalAllRowsCount}
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

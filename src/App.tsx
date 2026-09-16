@@ -40,9 +40,13 @@ export default function App() {
 
     const currentSheet = data.sheets[data.activeSheetName];
     if (currentSheet && currentSheet.columns.length > 0) {
-      const nrcCol = currentSheet.columns.find((c) => detectColumnMode(c) === 'nrc') || currentSheet.columns[0];
-      setSelectedColumn(nrcCol);
-      setActiveMode(detectColumnMode(nrcCol));
+      const priorityCol =
+        currentSheet.columns.find((c) => detectColumnMode(c) === 'amount') ||
+        currentSheet.columns.find((c) => detectColumnMode(c) === 'nrc') ||
+        currentSheet.columns.find((c) => c.toLowerCase().includes('merchant') || c.toLowerCase().includes('name')) ||
+        currentSheet.columns[0];
+      setSelectedColumn(priorityCol);
+      setActiveMode(detectColumnMode(priorityCol));
     }
   };
 
@@ -59,10 +63,13 @@ export default function App() {
       setActiveMode('fuzzy');
     } else {
       const targetSheet = workbookData.sheets[sheetName];
-      if (targetSheet.columns.length > 0) {
-        const nrcCol = targetSheet.columns.find((c) => detectColumnMode(c) === 'nrc') || targetSheet.columns[0];
-        setSelectedColumn(nrcCol);
-        setActiveMode(detectColumnMode(nrcCol));
+      if (targetSheet && targetSheet.columns.length > 0) {
+        const priorityCol =
+          targetSheet.columns.find((c) => detectColumnMode(c) === 'amount') ||
+          targetSheet.columns.find((c) => detectColumnMode(c) === 'nrc') ||
+          targetSheet.columns[0];
+        setSelectedColumn(priorityCol);
+        setActiveMode(detectColumnMode(priorityCol));
       }
     }
   };
@@ -227,6 +234,7 @@ export default function App() {
             {/* Results Table with Permanently Frozen Header */}
             <ResultsTable
               columns={currentSheet.columns}
+              allRows={currentSheet.rows}
               results={matchResults}
               selectedColumn={selectedColumn}
               activeMode={activeMode}
