@@ -1,4 +1,4 @@
-import { SearchMode, MatchResult, ALL_COLUMNS_KEY } from '../types';
+import { SearchMode, MatchResult, ALL_COLUMNS_KEY, TextMatchOption } from '../types';
 import {
   convertMyanmarToEnglishDigits,
   extractDigits,
@@ -425,42 +425,123 @@ export function matchPhone(cellValue: any, query: string): { matched: boolean; s
 }
 
 /**
- * Executes Fuzzy / Approximate matching for any other columns
+ * Executes Text / Name matching with user options: Equal, Contain, Like
+ * - Equal: Case-insensitive exact match
+ * - Contain: Substring containment
+ * - Like: Wildcard (% or *), starts-with, word token and typo-tolerant similarity
  */
-export function matchFuzzy(cellValue: any, query: string, minThreshold: number = 40): { matched: boolean; score: number; reason: string } {
+export function matchText(
+  cellValue: any,
+  query: string,
+  option: TextMatchOption = 'contain'
+): { matched: boolean; score: number; reason: string; highlightText?: string } {
   if (cellValue === null || cellValue === undefined) {
     return { matched: false, score: 0, reason: 'Empty' };
   }
 
-  const cellText = String(cellValue);
+  const cellText = String(cellValue).trim();
   const q = query.trim();
 
   if (!q) {
     return { matched: true, score: 100, reason: 'All' };
   }
 
-  const score = calculateFuzzyScore(q, cellText);
+  const normCell = cellText.toLowerCase();
+  const normQ = q.toLowerCase();
 
-  if (score >= minThreshold) {
-    let desc = '';
-    if (score === 100) {
-      desc = 'Exact match (100%)';
-    } else if (score >= 80) {
-      desc = `High similarity (${score}%)`;
-    } else if (score >= 60) {
-      desc = `Moderate similarity (${score}%)`;
-    } else {
-      desc = `Approximate match (${score}%)`;
+  // 1. Equal: Exact match (case-insensitive, trimmed)
+  if (option === 'equal') {
+    if (normCell === normQ) {
+      return {
+        matched: true,
+        score: 100,
+        reason: `Equal (=): "${cellText}"`,
+        highlightText: cellText,
+      };
     }
-
-    return {
-      matched: true,
-      score,
-      reason: desc,
-    };
+    return { matched: false, score: 0, reason: `Does not equal "${q}"` };
   }
 
-  return { matched: false, score, reason: 'No match' };
+  // 2. Contain: Substring containment (case-insensitive)
+  if (option === 'contain') {
+    if (normCell.includes(normQ)) {
+      const isExact = normCell === normQ;
+      const ratio = normQ.length / Math.max(normCell.length, 1);
+      const score = isExact ? 100 : Math.round(85 + ratio * 15);
+      return {
+        matched: true,
+        score,
+        reason: isExact ? `Exact match: "${cellText}"` : `Contains "${q}" in "${cellText}"`,
+        highlightText: q,
+      };
+    }
+    return { matched: false, score: 0, reason: `Does not contain "${q}"` };
+  }
+
+  // 3. Like: SQL LIKE pattern / starts-with / wildcard / similarity
+  if (option === 'like') {
+    // Check wildcard pattern with * or %
+    if (normQ.includes('*') || normQ.includes('%')) {
+      const pattern = '^' + normQ.replace(/[-\/\\^$+?.()|[\]{}]/g, '\\$&').replace(/[*%]/g, '.*') + '$';
+      try {
+        const regex = new RegExp(pattern, 'i');
+        if (regex.test(normCell)) {
+          return {
+            matched: true,
+            score: 95,
+            reason: `LIKE pattern match ("${q}")`,
+            highlightText: q.replace(/[*%]/g, ''),
+          };
+        }
+      } catch {
+        // ignore regex error
+      }
+    }
+
+    // Direct containment
+    if (normCell.includes(normQ)) {
+      const isExact = normCell === normQ;
+      return {
+        matched: true,
+        score: isExact ? 100 : 90,
+        reason: isExact ? `Exact match: "${cellText}"` : `LIKE contains: "${q}"`,
+        highlightText: q,
+      };
+    }
+
+    // Word tokens match (e.g. all words present)
+    const tokens = normQ.split(/\s+/).filter(Boolean);
+    if (tokens.length > 1 && tokens.every((t) => normCell.includes(t))) {
+      return {
+        matched: true,
+        score: 85,
+        reason: `Matched words: [${tokens.join(', ')}]`,
+        highlightText: tokens[0],
+      };
+    }
+
+    // Fuzzy similarity (Dice & Levenshtein)
+    const score = calculateFuzzyScore(normQ, normCell);
+    if (score >= 60) {
+      return {
+        matched: true,
+        score,
+        reason: `Similar (${score}%): "${cellText}"`,
+        highlightText: q,
+      };
+    }
+
+    return { matched: false, score: 0, reason: `Not similar to "${q}"` };
+  }
+
+  return { matched: false, score: 0, reason: 'No match' };
+}
+
+/**
+ * Executes Fuzzy / Approximate matching for any other columns
+ */
+export function matchFuzzy(cellValue: any, query: string, minThreshold: number = 40): { matched: boolean; score: number; reason: string } {
+  return matchText(cellValue, query, 'like');
 }
 
 /**
@@ -587,7 +668,8 @@ export function evaluateRowMatch(
   row: Record<string, any>,
   selectedColumn: string,
   mode: SearchMode,
-  query: string
+  query: string,
+  textOption: TextMatchOption = 'contain'
 ): MatchResult {
   const sheetName = row._sheetName as string | undefined;
 
@@ -634,12 +716,12 @@ export function evaluateRowMatch(
         colName,
       };
     }
-    const res = matchFuzzy(val, query);
+    const res = matchText(val, query, textOption);
     return {
       matched: res.matched,
       score: res.score,
       reason: res.reason,
-      highlightText: query,
+      highlightText: res.highlightText || query,
       colName,
     };
   };

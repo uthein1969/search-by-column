@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { ExcelWorkbookData, SearchMode, MatchResult, SheetDetail, ColumnInfo, ALL_SHEETS_TAB_ID, ALL_COLUMNS_KEY } from './types';
+import { ExcelWorkbookData, SearchMode, TextMatchOption, MatchResult, SheetDetail, ColumnInfo, ALL_SHEETS_TAB_ID, ALL_COLUMNS_KEY } from './types';
 import { generateSampleWorkbook } from './utils/sampleData';
 import { detectColumnMode, evaluateRowMatch } from './utils/searchMatcher';
 import { FileUploader } from './components/FileUploader';
@@ -15,6 +15,7 @@ export default function App() {
   const [activeSheetName, setActiveSheetName] = useState<string>('');
   const [selectedColumn, setSelectedColumn] = useState<string>('');
   const [activeMode, setActiveMode] = useState<SearchMode>('fuzzy');
+  const [textOption, setTextOption] = useState<TextMatchOption>('contain');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeDetailRow, setActiveDetailRow] = useState<Record<string, any> | null>(null);
 
@@ -153,7 +154,7 @@ export default function App() {
 
     const evaluated = currentSheet.rows
       .map((row, idx) => {
-        const res = evaluateRowMatch(row, selectedColumn, activeMode, query);
+        const res = evaluateRowMatch(row, selectedColumn, activeMode, query, textOption);
         return {
           ...res,
           rowIndex: idx,
@@ -164,7 +165,7 @@ export default function App() {
 
     // Sort by match score descending
     return evaluated.sort((a, b) => b.score - a.score);
-  }, [currentSheet, selectedColumn, activeMode, searchQuery]);
+  }, [currentSheet, selectedColumn, activeMode, searchQuery, textOption]);
 
 
   return (
@@ -224,6 +225,8 @@ export default function App() {
                 onSelectColumn={handleSelectColumn}
                 activeMode={activeMode}
                 onModeChange={setActiveMode}
+                textOption={textOption}
+                onTextOptionChange={setTextOption}
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 totalRows={currentSheet.rows.length}
@@ -238,6 +241,7 @@ export default function App() {
               results={matchResults}
               selectedColumn={selectedColumn}
               activeMode={activeMode}
+              textOption={textOption}
               searchQuery={searchQuery}
               onSelectRow={(row) => setActiveDetailRow(row)}
               fileName={workbookData?.fileName || 'Workbook.xlsx'}

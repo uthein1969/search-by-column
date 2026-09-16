@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { SearchMode, ColumnInfo, ALL_COLUMNS_KEY } from '../types';
+import { SearchMode, TextMatchOption, ColumnInfo, ALL_COLUMNS_KEY } from '../types';
 import { extractDigits, convertMyanmarToEnglishDigits } from '../utils/numberUtils';
-import { Search, X, ShieldCheck, PhoneCall, Sparkles, SlidersHorizontal, Calculator } from 'lucide-react';
+import { Search, X, ShieldCheck, PhoneCall, Sparkles, SlidersHorizontal, Calculator, Check } from 'lucide-react';
 
 interface SearchControlProps {
   columns: string[];
@@ -10,6 +10,8 @@ interface SearchControlProps {
   onSelectColumn: (column: string) => void;
   activeMode: SearchMode;
   onModeChange: (mode: SearchMode) => void;
+  textOption: TextMatchOption;
+  onTextOptionChange: (option: TextMatchOption) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   totalRows: number;
@@ -23,6 +25,8 @@ export const SearchControl: React.FC<SearchControlProps> = ({
   onSelectColumn,
   activeMode,
   onModeChange,
+  textOption,
+  onTextOptionChange,
   searchQuery,
   onSearchChange,
   totalRows,
@@ -55,8 +59,22 @@ export const SearchControl: React.FC<SearchControlProps> = ({
           icon: PhoneCall,
         };
       default:
+        if (textOption === 'equal') {
+          return {
+            label: 'Name: Equal (=)',
+            badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+            icon: Sparkles,
+          };
+        }
+        if (textOption === 'contain') {
+          return {
+            label: 'Name: Contain (⊆)',
+            badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            icon: Sparkles,
+          };
+        }
         return {
-          label: 'Fuzzy Match (Approximate)',
+          label: 'Name: Like (~)',
           badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
           icon: Sparkles,
         };
@@ -143,7 +161,11 @@ export const SearchControl: React.FC<SearchControlProps> = ({
                   ? 'Enter NRC last 6 digits...'
                   : activeMode === 'phone'
                   ? 'Enter last 6+ digits of Phone...'
-                  : `Search in "${selectedColumn}"...`
+                  : textOption === 'equal'
+                  ? `Search exact "${selectedColumn}" (= Equal)...`
+                  : textOption === 'contain'
+                  ? `Search "${selectedColumn}" containing text (⊆ Contain)...`
+                  : `Search "${selectedColumn}" similar or wildcard (~ Like)...`
               }
               className="w-full pl-7 pr-7 py-1 bg-slate-50 border border-slate-300 rounded-md text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
             />
@@ -184,6 +206,58 @@ export const SearchControl: React.FC<SearchControlProps> = ({
               ))}
             </div>
           )}
+
+          {/* Quick Text Match Option Pills (Equal, Contain, Like) */}
+          {activeMode === 'fuzzy' && (
+            <div
+              id="text-match-options-pills"
+              className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-md border border-slate-200 shrink-0 select-none"
+              title="Name Search Option"
+            >
+              <button
+                id="btn-opt-equal"
+                type="button"
+                onClick={() => onTextOptionChange('equal')}
+                className={`px-1.5 sm:px-2 py-0.5 rounded text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                  textOption === 'equal'
+                    ? 'bg-indigo-600 text-white shadow-xs font-semibold'
+                    : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                }`}
+                title="Equal: တိကျစွာတူညီမှသာရှာပါ (Exact match only)"
+              >
+                <span className="font-mono font-bold text-[10px]">=</span>
+                <span>Equal</span>
+              </button>
+              <button
+                id="btn-opt-contain"
+                type="button"
+                onClick={() => onTextOptionChange('contain')}
+                className={`px-1.5 sm:px-2 py-0.5 rounded text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                  textOption === 'contain'
+                    ? 'bg-emerald-600 text-white shadow-xs font-semibold'
+                    : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                }`}
+                title="Contain: စာသားပါဝင်မှုဖြင့်ရှာပါ (Substring match)"
+              >
+                <span className="font-mono font-bold text-[10px]">⊆</span>
+                <span>Contain</span>
+              </button>
+              <button
+                id="btn-opt-like"
+                type="button"
+                onClick={() => onTextOptionChange('like')}
+                className={`px-1.5 sm:px-2 py-0.5 rounded text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                  textOption === 'like'
+                    ? 'bg-amber-600 text-white shadow-xs font-semibold'
+                    : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                }`}
+                title="Like: အနီးစပ်ဆုံးဆင်တူမှု သို့မဟုတ် Wildcard * ဖြင့်ရှာပါ (Fuzzy / Pattern)"
+              >
+                <span className="font-mono font-bold text-[10px]">~</span>
+                <span>Like</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Right Side: Rule Badge & Override Toggle */}
@@ -215,56 +289,98 @@ export const SearchControl: React.FC<SearchControlProps> = ({
 
       {/* Mode Override Bar (Only shown when toggled) */}
       {showModeOverride && (
-        <div id="mode-override-bar" className="mt-1.5 pt-1.5 border-t border-slate-100 flex flex-wrap items-center gap-1 text-xs">
-          <span className="text-slate-500 text-[11px] font-medium">Rule Mode:</span>
-          <button
-            id="btn-mode-amount"
-            type="button"
-            onClick={() => onModeChange('amount')}
-            className={`px-2 py-0.5 rounded-md border text-xs transition-all cursor-pointer ${
-              activeMode === 'amount'
-                ? 'bg-blue-600 text-white border-blue-600 font-semibold shadow-xs'
-                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            Amount (&gt;, &lt;, =)
-          </button>
-          <button
-            id="btn-mode-nrc"
-            type="button"
-            onClick={() => onModeChange('nrc')}
-            className={`px-2 py-0.5 rounded-md border text-xs transition-all cursor-pointer ${
-              activeMode === 'nrc'
-                ? 'bg-indigo-600 text-white border-indigo-600 font-semibold shadow-xs'
-                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            NRC 6 Digits
-          </button>
-          <button
-            id="btn-mode-phone"
-            type="button"
-            onClick={() => onModeChange('phone')}
-            className={`px-2 py-0.5 rounded-md border text-xs transition-all cursor-pointer ${
-              activeMode === 'phone'
-                ? 'bg-emerald-600 text-white border-emerald-600 font-semibold shadow-xs'
-                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            Phone 6+ Digits
-          </button>
-          <button
-            id="btn-mode-fuzzy"
-            type="button"
-            onClick={() => onModeChange('fuzzy')}
-            className={`px-2 py-0.5 rounded-md border text-xs transition-all cursor-pointer ${
-              activeMode === 'fuzzy'
-                ? 'bg-amber-600 text-white border-amber-600 font-semibold shadow-xs'
-                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            Fuzzy Match
-          </button>
+        <div id="mode-override-bar" className="mt-1.5 pt-1.5 border-t border-slate-100 space-y-1.5 text-xs">
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-slate-500 text-[11px] font-medium">Rule Mode:</span>
+            <button
+              id="btn-mode-amount"
+              type="button"
+              onClick={() => onModeChange('amount')}
+              className={`px-2 py-0.5 rounded-md border text-xs transition-all cursor-pointer ${
+                activeMode === 'amount'
+                  ? 'bg-blue-600 text-white border-blue-600 font-semibold shadow-xs'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              Amount (&gt;, &lt;, =)
+            </button>
+            <button
+              id="btn-mode-nrc"
+              type="button"
+              onClick={() => onModeChange('nrc')}
+              className={`px-2 py-0.5 rounded-md border text-xs transition-all cursor-pointer ${
+                activeMode === 'nrc'
+                  ? 'bg-indigo-600 text-white border-indigo-600 font-semibold shadow-xs'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              NRC 6 Digits
+            </button>
+            <button
+              id="btn-mode-phone"
+              type="button"
+              onClick={() => onModeChange('phone')}
+              className={`px-2 py-0.5 rounded-md border text-xs transition-all cursor-pointer ${
+                activeMode === 'phone'
+                  ? 'bg-emerald-600 text-white border-emerald-600 font-semibold shadow-xs'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              Phone 6+ Digits
+            </button>
+            <button
+              id="btn-mode-fuzzy"
+              type="button"
+              onClick={() => onModeChange('fuzzy')}
+              className={`px-2 py-0.5 rounded-md border text-xs transition-all cursor-pointer ${
+                activeMode === 'fuzzy'
+                  ? 'bg-amber-600 text-white border-amber-600 font-semibold shadow-xs'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              Name / Text Search
+            </button>
+          </div>
+
+          {/* Detailed Text Match Options */}
+          {activeMode === 'fuzzy' && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-dashed border-slate-200">
+              <span className="text-slate-600 text-[11px] font-semibold">Name Match Option:</span>
+              <button
+                type="button"
+                onClick={() => onTextOptionChange('equal')}
+                className={`px-2 py-0.5 rounded-md border text-xs transition-all cursor-pointer flex items-center gap-1 ${
+                  textOption === 'equal'
+                    ? 'bg-indigo-600 text-white border-indigo-600 font-semibold shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span>= Equal (တိကျစွာတူညီ)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onTextOptionChange('contain')}
+                className={`px-2 py-0.5 rounded-md border text-xs transition-all cursor-pointer flex items-center gap-1 ${
+                  textOption === 'contain'
+                    ? 'bg-emerald-600 text-white border-emerald-600 font-semibold shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span>⊆ Contain (စာသားပါဝင်)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onTextOptionChange('like')}
+                className={`px-2 py-0.5 rounded-md border text-xs transition-all cursor-pointer flex items-center gap-1 ${
+                  textOption === 'like'
+                    ? 'bg-amber-600 text-white border-amber-600 font-semibold shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span>~ Like (ဆင်တူ / Wildcard *)</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 

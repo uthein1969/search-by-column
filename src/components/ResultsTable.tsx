@@ -1,7 +1,32 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { MatchResult, SearchMode, ALL_SHEETS_TAB_ID, ALL_COLUMNS_KEY } from '../types';
-import { Download, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CheckCircle2, Layers, FileSpreadsheet, FileText, ChevronDown, FileCode } from 'lucide-react';
+import { MatchResult, SearchMode, TextMatchOption, ALL_SHEETS_TAB_ID, ALL_COLUMNS_KEY } from '../types';
+import {
+  Download,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  CheckCircle2,
+  Layers,
+  FileSpreadsheet,
+  FileText,
+  ChevronDown,
+  FileCode,
+  Calculator,
+  Sigma,
+} from 'lucide-react';
+import { parseAmount } from '../utils/numberUtils';
+import { detectColumnMode } from '../utils/searchMatcher';
+
+interface ColumnSummary {
+  col: string;
+  sum: number;
+  count: number;
+  formatted: string;
+  isAmount: boolean;
+}
 
 interface ResultsTableProps {
   columns: string[];
@@ -9,6 +34,7 @@ interface ResultsTableProps {
   results: MatchResult[];
   selectedColumn: string;
   activeMode: SearchMode;
+  textOption?: TextMatchOption;
   searchQuery: string;
   onSelectRow: (row: Record<string, any>) => void;
   fileName: string;
@@ -21,6 +47,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
   results,
   selectedColumn,
   activeMode,
+  textOption = 'contain',
   searchQuery,
   onSelectRow,
   fileName,
@@ -31,6 +58,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [includeMatchAudit, setIncludeMatchAudit] = useState(false);
   const [includeRowNumber, setIncludeRowNumber] = useState(false);
+  const [includeTotalRow, setIncludeTotalRow] = useState(true);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
 
@@ -126,6 +154,169 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
   };
   const pageNumbers = getPageNumbers();
 
+  // Identify columns that represent financial amounts, fees, balances or monetary values
+  const isAmountColumn = (colName: string): boolean => {
+    if (!colName) return false;
+    const lower = colName.toLowerCase().trim();
+
+    // 1. Definite NON-amount column patterns:
+    // Dates, Times, Timestamps
+    if (
+      lower.includes('date') ||
+      lower.includes('time') ||
+      lower.includes('timestamp') ||
+      lower.includes('year') ||
+      lower.includes('month') ||
+      lower.includes('day')
+    ) {
+      return false;
+    }
+
+    // Identifiers, References, Codes, Party, Names, Types, Statuses, Accounts, Phones, NRC
+    if (
+      lower.includes('id') ||
+      lower.includes('ref') ||
+      lower.includes('party') ||
+      lower.includes('account') ||
+      lower.includes('phone') ||
+      lower.includes('mobile') ||
+      lower.includes('tel') ||
+      lower.includes('nrc') ||
+      lower.includes('card') ||
+      lower.includes('pan') ||
+      lower.includes('terminal') ||
+      lower.includes('auth') ||
+      lower.includes('trace') ||
+      lower.includes('rrn') ||
+      lower.includes('stan') ||
+      lower.includes('seq') ||
+      lower.includes('code') ||
+      lower.includes('token') ||
+      lower.includes('batch') ||
+      lower.includes('type') ||
+      lower.includes('mode') ||
+      lower.includes('status') ||
+      lower.includes('channel') ||
+      lower.includes('name') ||
+      lower.includes('merchant') ||
+      lower.includes('customer') ||
+      lower.includes('user') ||
+      lower.includes('agent') ||
+      lower.includes('branch') ||
+      lower.includes('desc') ||
+      lower.includes('description') ||
+      lower.includes('remark') ||
+      lower.includes('note')
+    ) {
+      // Allow ONLY if the column name EXPLICITLY specifies an amount keyword
+      // (e.g. 'receiver amount', 'transaction amount', 'dps fee')
+      if (
+        lower.includes('amount') ||
+        lower.includes('amt') ||
+        lower.includes('fee') ||
+        lower.includes('expense') ||
+        lower.endsWith('_val')
+      ) {
+        return true;
+      }
+      return false;
+    }
+
+    // 2. Definite AMOUNT keywords
+    if (
+      lower.includes('amount') ||
+      lower.includes('amt') ||
+      lower.includes('fee') ||
+      lower.includes('fees') ||
+      lower.includes('expense') ||
+      lower.includes('expenses') ||
+      lower.includes('mdr') ||
+      lower.includes('price') ||
+      lower.includes('cost') ||
+      lower.includes('charge') ||
+      lower.includes('balance') ||
+      lower.includes('salary') ||
+      lower.includes('commission') ||
+      lower.includes('bonus') ||
+      lower.includes('refund') ||
+      lower.startsWith('add_ampr') ||
+      lower.includes('ampr') ||
+      lower.endsWith('_val') ||
+      lower.includes('ပမာဏ') ||
+      lower.includes('ငွေပမာဏ') ||
+      lower.includes('ကျသင့်ငွေ') ||
+      lower.includes('တန်ဖိုး') ||
+      lower.includes('ကြေး')
+    ) {
+      return true;
+    }
+
+    // Check if column is strictly 'total' or 'sum' or 'net' or 'gross'
+    if (lower === 'total' || lower === 'sum' || lower === 'net' || lower === 'gross') {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Calculate sum and count STRICTLY for amount columns across all matched results
+  const columnTotals = useMemo(() => {
+    const totals: Record<string, ColumnSummary> = {};
+
+    if (results.length === 0) return totals;
+
+    for (const col of displayColumns) {
+      // STRICT: Only sum columns that are confirmed genuine Amount / Financial columns
+      if (!isAmountColumn(col)) {
+        continue;
+      }
+
+      let sum = 0;
+      let numericCount = 0;
+      let hasDecimals = false;
+
+      for (const item of results) {
+        const val = item.row[col];
+        if (val === null || val === undefined || String(val).trim() === '') {
+          continue;
+        }
+
+        const num = parseAmount(val);
+        if (num !== null && !isNaN(num)) {
+          sum += num;
+          numericCount++;
+          if (!Number.isInteger(num)) {
+            hasDecimals = true;
+          }
+        }
+      }
+
+      // Only record total if at least one valid numeric value was found
+      if (numericCount > 0) {
+        const cleanSum = Math.round((sum + Number.EPSILON) * 1000) / 1000;
+        const formatted =
+          hasDecimals || !Number.isInteger(cleanSum)
+            ? cleanSum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : cleanSum.toLocaleString('en-US');
+
+        totals[col] = {
+          col,
+          sum: cleanSum,
+          count: numericCount,
+          formatted,
+          isAmount: true,
+        };
+      }
+    }
+
+    return totals;
+  }, [results, displayColumns]);
+
+  // List of primary amount columns for the bottom summary cards
+  const amountSummaryList = useMemo(() => {
+    return (Object.values(columnTotals) as ColumnSummary[]).filter((ct) => ct.isAmount);
+  }, [columnTotals]);
+
   const exportData = (format: 'xlsx' | 'csv', scope: 'filtered' | 'all') => {
     try {
       setShowExportMenu(false);
@@ -166,6 +357,29 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
 
       if (rowsSource.length === 0) return;
 
+      // Append Total Row if enabled
+      if (includeTotalRow && !isScopeAll && rowsSource.length > 0) {
+        const totalRow: Record<string, any> = {};
+        if (includeRowNumber) {
+          totalRow['No'] = 'TOTAL';
+        }
+        if (isAllSheets) {
+          totalRow['Worksheet_Source'] = 'ALL';
+        }
+        displayColumns.forEach((col) => {
+          if (columnTotals[col]) {
+            totalRow[col] = columnTotals[col].sum;
+          } else {
+            totalRow[col] = '';
+          }
+        });
+        if (includeMatchAudit) {
+          totalRow['Match_Verification'] = `Total (${results.length} rows)`;
+          totalRow['Match_Score_Percent'] = '';
+        }
+        rowsSource.push(totalRow);
+      }
+
       const worksheet = XLSX.utils.json_to_sheet(rowsSource);
       const workbook = XLSX.utils.book_new();
       const sheetTitle = (isAllSheets ? 'All_Sheets' : activeSheetName).slice(0, 31);
@@ -197,22 +411,30 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
       return <span>{textVal}</span>;
     }
 
-    if (item.highlightText && textVal.includes(item.highlightText)) {
-      const parts = textVal.split(item.highlightText);
-      return (
-        <span>
-          {parts.map((part, index) => (
-            <React.Fragment key={index}>
-              {part}
-              {index < parts.length - 1 && (
-                <mark className="bg-amber-200 text-amber-900 font-semibold px-1 rounded-xs">
-                  {item.highlightText}
-                </mark>
+    const highlightTarget = item.highlightText || searchQuery.trim();
+    if (highlightTarget) {
+      try {
+        const escaped = highlightTarget.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const regex = new RegExp(`(${escaped})`, 'gi');
+        if (regex.test(textVal)) {
+          const parts = textVal.split(regex);
+          return (
+            <span>
+              {parts.map((part, index) =>
+                part.toLowerCase() === highlightTarget.toLowerCase() ? (
+                  <mark key={index} className="bg-amber-200 text-amber-900 font-semibold px-0.5 rounded-xs">
+                    {part}
+                  </mark>
+                ) : (
+                  <span key={index}>{part}</span>
+                )
               )}
-            </React.Fragment>
-          ))}
-        </span>
-      );
+            </span>
+          );
+        }
+      } catch {
+        // Fallback to plain text if regex fails
+      }
     }
 
     if (activeMode === 'amount') {
@@ -360,10 +582,19 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
                     />
                     <span>Include "No" Index Column</span>
                   </label>
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-slate-900 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={includeTotalRow}
+                      onChange={(e) => setIncludeTotalRow(e.target.checked)}
+                      className="rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 w-3 h-3"
+                    />
+                    <span>Include Totals Row at bottom (စုစုပေါင်း)</span>
+                  </label>
                   <div className="text-[9px] text-slate-400 pt-0.5">
-                    {!includeMatchAudit && !includeRowNumber
+                    {!includeMatchAudit && !includeRowNumber && !includeTotalRow
                       ? `✓ Clean export (${displayColumns.length} original columns only)`
-                      : `+ Added metadata columns`}
+                      : `+ Added metadata & total rows`}
                   </div>
                 </div>
 
@@ -585,8 +816,124 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
               </tr>
             )}
           </tbody>
+
+          {/* Sticky Table Footer: Sum of Result Rows per column */}
+          {results.length > 0 && (
+            <tfoot className="sticky bottom-0 z-20 shadow-xs border-t-2 border-slate-300 bg-slate-100 text-slate-800">
+              <tr className="font-semibold text-xs leading-tight divide-x divide-slate-200">
+                {/* Row index column sum icon */}
+                <td className="sticky left-0 z-30 py-2 px-2 text-center bg-slate-200 border-r border-slate-300 font-bold text-[12px] text-slate-800 shadow-2xs">
+                  Σ
+                </td>
+
+                {/* All Sheets indicator */}
+                {isAllSheets && (
+                  <td className="py-2 px-2 border-r border-slate-300 text-indigo-900 bg-indigo-50/90 font-bold text-[10px] uppercase">
+                    All
+                  </td>
+                )}
+
+                {/* Match Verification summary cell */}
+                <td className="py-2 px-2 border-l border-r border-slate-300 bg-emerald-100/80 text-emerald-950 font-bold text-xs">
+                  <div className="flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="text-slate-700 font-medium">Total:</span>
+                    <span className="font-mono bg-white text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded text-[11px] font-bold shadow-2xs">
+                      {results.length.toLocaleString()} rows
+                    </span>
+                  </div>
+                </td>
+
+                {/* Columns sum cells */}
+                {displayColumns.map((col) => {
+                  const colTotal = columnTotals[col];
+                  const isSelected =
+                    col === selectedColumn ||
+                    (selectedColumn === ALL_COLUMNS_KEY && results.some((r) => r.matchedColumn === col));
+
+                  return (
+                    <td
+                      key={`tfoot-col-${col}`}
+                      className={`py-2 px-2 whitespace-nowrap font-mono text-xs ${
+                        colTotal
+                          ? isSelected
+                            ? 'bg-amber-100 text-amber-950 font-bold border-t-2 border-t-amber-500'
+                            : 'bg-emerald-50/80 text-emerald-950 font-bold'
+                          : 'text-slate-300 text-center font-normal select-none'
+                      }`}
+                      title={
+                        colTotal
+                          ? `${col} Total Sum: ${colTotal.formatted} (${colTotal.count.toLocaleString()} rows)`
+                          : undefined
+                      }
+                    >
+                      {colTotal ? (
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-950 text-xs tracking-tight">
+                            {colTotal.formatted}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-sans font-normal">
+                            ({colTotal.count.toLocaleString()} rows)
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-300 select-none">—</span>
+                      )}
+                    </td>
+                  );
+                })}
+
+                {/* Action View Column */}
+                <td className="py-2 px-1 text-center bg-slate-100 text-slate-300 select-none">—</td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
+
+      {/* Result Row Amount Summary Bar (ရလဒ် Amount စုစုပေါင်း) */}
+      {results.length > 0 && amountSummaryList.length > 0 && (
+        <div
+          id="results-amount-summary-bar"
+          className="bg-emerald-50/90 border-t border-b border-emerald-200 px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0 select-none"
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 text-emerald-950 font-bold">
+              <Calculator className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+              <span>Result Amounts Total (ရလဒ် စုစုပေါင်း ပမာဏ):</span>
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {amountSummaryList.map((item) => {
+                const isSelected = item.col === selectedColumn;
+                return (
+                  <div
+                    key={`summary-card-${item.col}`}
+                    className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border text-xs shadow-2xs transition-all ${
+                      isSelected
+                        ? 'bg-amber-100 border-amber-300 text-amber-950 font-bold ring-1 ring-amber-400'
+                        : 'bg-white border-emerald-200 text-slate-800 hover:border-emerald-300'
+                    }`}
+                    title={`${item.col}: ${item.formatted} (Sum of ${item.count} items)`}
+                  >
+                    <span className="text-slate-600 text-[11px] font-medium">{item.col}:</span>
+                    <span className="font-mono font-bold text-emerald-700 text-xs">{item.formatted}</span>
+                    <span className="text-[10px] text-slate-400 font-sans">({item.count} rows)</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-600 font-medium ml-auto">
+            <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-mono text-[10px] font-semibold border border-emerald-200">
+              Σ {amountSummaryList.length} {amountSummaryList.length === 1 ? 'Column' : 'Columns'}
+            </span>
+            <span>
+              from all <strong className="text-slate-900">{results.length.toLocaleString()}</strong> matched rows
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Pagination & Selection Bar - Compact */}
       {results.length > 0 && (

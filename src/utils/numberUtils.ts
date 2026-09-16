@@ -85,6 +85,7 @@ export function normalizePhoneNumber(text: any): string {
 /**
  * Parses numeric amount from string or number, removing commas, currency symbols (Ks, MMK, $, etc.),
  * converting Myanmar numerals, and handling decimals.
+ * Rejects non-numeric strings (like dates, text with words, IDs with letters).
  */
 export function parseAmount(val: any): number | null {
   if (val === null || val === undefined) return null;
@@ -94,15 +95,32 @@ export function parseAmount(val: any): number | null {
   const str = convertMyanmarToEnglishDigits(String(val)).trim();
   if (!str) return null;
 
-  // Remove commas, spaces, and currency symbols (e.g. Ks, MMK, Kyat, USD, $, etc.)
-  const cleaned = str
-    .replace(/[,\s]/g, '')
-    .replace(/(?:ks|mmk|kyat|usd|\$|€|£)/gi, '')
-    .replace(/[^0-9.-]/g, '');
+  let s = str;
 
-  if (!cleaned || cleaned === '-' || cleaned === '.' || cleaned === '-.') return null;
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? null : num;
+  // Check negative in parentheses like (1,500.00) or (500)
+  let isNegative = false;
+  const parenMatch = s.match(/^\((.*)\)$/);
+  if (parenMatch) {
+    isNegative = true;
+    s = parenMatch[1].trim();
+  }
+
+  // Remove common currency symbols/words at beginning or end
+  s = s
+    .replace(/^(?:ks|mmk|kyat|usd|\$|€|£|ကျပ်|ပြား)\s*/i, '')
+    .replace(/\s*(?:ks|mmk|kyat|usd|\$|€|£|ကျပ်|ပြား)$/i, '')
+    .trim();
+
+  // If there are still letters, words, colons, or multiple hyphens (like dates 2026-09-15), it is NOT an amount
+  // Allow only digits, comma, dot, and optional leading minus/plus
+  const withoutCommas = s.replace(/,/g, '').trim();
+  if (!/^[+-]?\d*(?:\.\d+)?$/.test(withoutCommas) || withoutCommas === '' || withoutCommas === '+' || withoutCommas === '-') {
+    return null;
+  }
+
+  const num = parseFloat(withoutCommas);
+  if (isNaN(num)) return null;
+  return isNegative ? -Math.abs(num) : num;
 }
 
 export type ComparisonOp = '>' | '>=' | '<' | '<=' | '=' | '!=' | 'range';
