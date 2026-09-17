@@ -1,19 +1,33 @@
 import React from 'react';
 import { X, Copy, Check } from 'lucide-react';
+import { isAmountColumn, formatAmountValue, parseAmount } from '../utils/numberUtils';
 
 interface DetailModalProps {
   row: Record<string, any> | null;
   onClose: () => void;
   selectedColumn: string;
+  divideBy100?: boolean;
 }
 
-export const DetailModal: React.FC<DetailModalProps> = ({ row, onClose, selectedColumn }) => {
+export const DetailModal: React.FC<DetailModalProps> = ({
+  row,
+  onClose,
+  selectedColumn,
+  divideBy100 = false,
+}) => {
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
 
   if (!row) return null;
 
   const handleCopy = (key: string, val: any) => {
-    navigator.clipboard.writeText(String(val ?? ''));
+    let textToCopy = String(val ?? '');
+    if (divideBy100 && isAmountColumn(key)) {
+      const num = parseAmount(val);
+      if (num !== null && !isNaN(num)) {
+        textToCopy = (num / 100).toFixed(2);
+      }
+    }
+    navigator.clipboard.writeText(textToCopy);
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 1500);
   };
@@ -82,7 +96,18 @@ export const DetailModal: React.FC<DetailModalProps> = ({ row, onClose, selected
 
                 <div className="flex-1 text-slate-800 break-words font-medium text-sm">
                   {val !== null && val !== undefined && String(val) !== '' ? (
-                    String(val)
+                    divideBy100 && isAmountColumn(key) ? (
+                      <div>
+                        <span className="font-mono text-emerald-700 font-bold text-base">
+                          {formatAmountValue(val, true)}
+                        </span>
+                        <span className="ml-2 text-xs text-slate-400 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                          Raw: {String(val)}
+                        </span>
+                      </div>
+                    ) : (
+                      String(val)
+                    )
                   ) : (
                     <em className="text-slate-400">Empty</em>
                   )}

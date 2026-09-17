@@ -5,6 +5,8 @@ import {
   normalizePhoneNumber,
   parseAmount,
   parseAmountQuery,
+  isAmountColumn,
+  formatAmountValue,
 } from './numberUtils';
 
 /**
@@ -564,7 +566,8 @@ export function matchFuzzy(cellValue: any, query: string, minThreshold: number =
  */
 export function matchAmount(
   cellValue: any,
-  query: string
+  query: string,
+  divideBy100: boolean = false
 ): { matched: boolean; score: number; reason: string; formattedVal?: string } {
   if (cellValue === null || cellValue === undefined) {
     return { matched: false, score: 0, reason: 'Empty' };
@@ -575,7 +578,7 @@ export function matchAmount(
     return { matched: true, score: 100, reason: 'All' };
   }
 
-  const cellNum = parseAmount(cellValue);
+  const rawNum = parseAmount(cellValue);
   const parsedQuery = parseAmountQuery(q);
 
   // If query could not be parsed as an amount query or operator,
@@ -591,12 +594,14 @@ export function matchAmount(
   }
 
   // If cell has no numeric value, it cannot match numeric amount
-  if (cellNum === null) {
+  if (rawNum === null) {
     return { matched: false, score: 0, reason: 'Non-numeric cell' };
   }
 
+  const cellNum = divideBy100 ? rawNum / 100 : rawNum;
+
   const formattedCell = cellNum.toLocaleString(undefined, {
-    minimumFractionDigits: Number.isInteger(cellNum) ? 0 : 2,
+    minimumFractionDigits: divideBy100 || !Number.isInteger(cellNum) ? 2 : 0,
     maximumFractionDigits: 2,
   });
 
@@ -612,19 +617,19 @@ export function matchAmount(
 
   switch (parsedQuery.operator) {
     case '>':
-      matched = cellNum > target + EPSILON;
+      matched = cellNum > target + EPSILON || (divideBy100 && rawNum > target + EPSILON);
       reason = `Amount > ${formattedTarget} (${formattedCell})`;
       break;
     case '>=':
-      matched = cellNum >= target - EPSILON;
+      matched = cellNum >= target - EPSILON || (divideBy100 && rawNum >= target - EPSILON);
       reason = `Amount ≥ ${formattedTarget} (${formattedCell})`;
       break;
     case '<':
-      matched = cellNum < target - EPSILON;
+      matched = cellNum < target - EPSILON || (divideBy100 && rawNum < target - EPSILON);
       reason = `Amount < ${formattedTarget} (${formattedCell})`;
       break;
     case '<=':
-      matched = cellNum <= target + EPSILON;
+      matched = cellNum <= target + EPSILON || (divideBy100 && rawNum <= target + EPSILON);
       reason = `Amount ≤ ${formattedTarget} (${formattedCell})`;
       break;
     case '!=':
@@ -637,7 +642,9 @@ export function matchAmount(
         minimumFractionDigits: Number.isInteger(target2) ? 0 : 2,
         maximumFractionDigits: 2,
       });
-      matched = cellNum >= target - EPSILON && cellNum <= target2 + EPSILON;
+      matched =
+        (cellNum >= target - EPSILON && cellNum <= target2 + EPSILON) ||
+        (divideBy100 && rawNum >= target - EPSILON && rawNum <= target2 + EPSILON);
       reason = `Amount [${formattedTarget} - ${formattedTarget2}] (${formattedCell})`;
       break;
     case '=':
@@ -645,6 +652,9 @@ export function matchAmount(
       if (Math.abs(cellNum - target) < EPSILON) {
         matched = true;
         reason = `Amount = ${formattedTarget} (Exact: ${formattedCell})`;
+      } else if (Math.abs(rawNum - target) < EPSILON) {
+        matched = true;
+        reason = `Amount = ${formattedTarget} (Raw: ${cellValue})`;
       } else if (Math.abs(cellNum / 100 - target) < EPSILON) {
         matched = true;
         reason = `Amount = ${formattedTarget} (Matched raw minor unit: ${formattedCell})`;
@@ -682,7 +692,8 @@ export function evaluateRowMatch(
   selectedColumn: string,
   mode: SearchMode,
   query: string,
-  textOption: TextMatchOption = 'contain'
+  textOption: TextMatchOption = 'contain',
+  divideBy100: boolean = false
 ): MatchResult {
   const sheetName = row._sheetName as string | undefined;
 
@@ -700,7 +711,8 @@ export function evaluateRowMatch(
   // Helper to match a specific cell value with given mode
   const testCell = (colName: string, val: any, colMode: SearchMode) => {
     if (colMode === 'amount') {
-      const res = matchAmount(val, query);
+      const isAmt = isAmountColumn(colName);
+      const res = matchAmount(val, query, divideBy100 && isAmt);
       return {
         matched: res.matched,
         score: res.score,

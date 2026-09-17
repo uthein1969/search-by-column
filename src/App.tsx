@@ -17,6 +17,7 @@ export default function App() {
   const [activeMode, setActiveMode] = useState<SearchMode>('fuzzy');
   const [textOption, setTextOption] = useState<TextMatchOption>('contain');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [divideBy100, setDivideBy100] = useState<boolean>(false);
   const [activeDetailRow, setActiveDetailRow] = useState<Record<string, any> | null>(null);
 
   // Initialize with multi-sheet sample workbook
@@ -154,7 +155,7 @@ export default function App() {
 
     const evaluated = currentSheet.rows
       .map((row, idx) => {
-        const res = evaluateRowMatch(row, selectedColumn, activeMode, query, textOption);
+        const res = evaluateRowMatch(row, selectedColumn, activeMode, query, textOption, divideBy100);
         return {
           ...res,
           rowIndex: idx,
@@ -165,7 +166,7 @@ export default function App() {
 
     // Sort by match score descending
     return evaluated.sort((a, b) => b.score - a.score);
-  }, [currentSheet, selectedColumn, activeMode, searchQuery, textOption]);
+  }, [currentSheet, selectedColumn, activeMode, searchQuery, textOption, divideBy100]);
 
 
   return (
@@ -231,6 +232,8 @@ export default function App() {
                 onSearchChange={setSearchQuery}
                 totalRows={currentSheet.rows.length}
                 matchedCount={matchResults.length}
+                divideBy100={divideBy100}
+                onToggleDivideBy100={setDivideBy100}
               />
             </div>
 
@@ -246,6 +249,8 @@ export default function App() {
               onSelectRow={(row) => setActiveDetailRow(row)}
               fileName={workbookData?.fileName || 'Workbook.xlsx'}
               activeSheetName={activeSheetName}
+              divideBy100={divideBy100}
+              onToggleDivideBy100={setDivideBy100}
             />
           </>
         )}
@@ -256,6 +261,7 @@ export default function App() {
         row={activeDetailRow}
         onClose={() => setActiveDetailRow(null)}
         selectedColumn={selectedColumn}
+        divideBy100={divideBy100}
       />
 
       {/* Compact Footer */}

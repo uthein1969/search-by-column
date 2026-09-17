@@ -202,3 +202,153 @@ export function parseAmountQuery(query: string): ParsedAmountQuery {
     rawInput: raw,
   };
 }
+
+/**
+ * Identifies columns that represent financial amounts, fees, balances or monetary values.
+ * Excludes currency codes (_CUR, CURRENCY, etc.), dates, IDs, reference numbers, etc.
+ */
+export function isAmountColumn(colName: string): boolean {
+  if (!colName) return false;
+  const lower = colName.toLowerCase().trim();
+
+  // 0. Definite CURRENCY CODE exclusion:
+  // Columns containing '_cur', 'cur_', currency codes/names (e.g. OPER_AMOUNT_CUR, STTL_AMOUNT_CUR, CURRENCY)
+  // are currency identifiers (e.g. 104 = MMK, 840 = USD) and must NEVER be totaled or formatted as monetary amount.
+  if (
+    lower.includes('_cur') ||
+    lower.includes('cur_') ||
+    lower.endsWith('_cur') ||
+    lower.endsWith('-cur') ||
+    lower.endsWith('.cur') ||
+    lower.includes('_curr') ||
+    lower.includes('curr_') ||
+    lower.includes('currency') ||
+    lower.includes('_ccy') ||
+    lower.includes('ccy_') ||
+    lower === 'cur' ||
+    lower === 'curr' ||
+    lower === 'ccy' ||
+    /\bcur\b/i.test(colName) ||
+    /\bcurr\b/i.test(colName) ||
+    /\bccy\b/i.test(colName) ||
+    /\bcurrency\b/i.test(colName)
+  ) {
+    return false;
+  }
+
+  // 1. Definite NON-amount column patterns:
+  // Dates, Times, Timestamps
+  if (
+    lower.includes('date') ||
+    lower.includes('time') ||
+    lower.includes('timestamp') ||
+    lower.includes('year') ||
+    lower.includes('month') ||
+    lower.includes('day')
+  ) {
+    return false;
+  }
+
+  // Identifiers, References, Codes, Party, Names, Types, Statuses, Accounts, Phones, NRC
+  if (
+    lower.includes('id') ||
+    lower.includes('ref') ||
+    lower.includes('party') ||
+    lower.includes('account') ||
+    lower.includes('phone') ||
+    lower.includes('mobile') ||
+    lower.includes('tel') ||
+    lower.includes('nrc') ||
+    lower.includes('card') ||
+    lower.includes('pan') ||
+    lower.includes('terminal') ||
+    lower.includes('auth') ||
+    lower.includes('trace') ||
+    lower.includes('rrn') ||
+    lower.includes('stan') ||
+    lower.includes('seq') ||
+    lower.includes('code') ||
+    lower.includes('token') ||
+    lower.includes('batch') ||
+    lower.includes('type') ||
+    lower.includes('mode') ||
+    lower.includes('status') ||
+    lower.includes('channel') ||
+    lower.includes('name') ||
+    lower.includes('merchant') ||
+    lower.includes('customer') ||
+    lower.includes('user') ||
+    lower.includes('agent') ||
+    lower.includes('branch') ||
+    lower.includes('desc') ||
+    lower.includes('description') ||
+    lower.includes('remark') ||
+    lower.includes('note')
+  ) {
+    // Allow ONLY if the column name EXPLICITLY specifies an amount keyword
+    // (e.g. 'receiver amount', 'transaction amount', 'dps fee', 'oper_request_amount_val', 'sttl_amount_val')
+    if (
+      lower.includes('amount') ||
+      lower.includes('amt') ||
+      lower.includes('fee') ||
+      lower.includes('expense') ||
+      lower.endsWith('_val')
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  // 2. Definite AMOUNT keywords
+  if (
+    lower.includes('amount') ||
+    lower.includes('amt') ||
+    lower.includes('fee') ||
+    lower.includes('fees') ||
+    lower.includes('expense') ||
+    lower.includes('expenses') ||
+    lower.includes('mdr') ||
+    lower.includes('price') ||
+    lower.includes('cost') ||
+    lower.includes('charge') ||
+    lower.includes('balance') ||
+    lower.includes('salary') ||
+    lower.includes('commission') ||
+    lower.includes('bonus') ||
+    lower.includes('refund') ||
+    lower.startsWith('add_ampr') ||
+    lower.includes('ampr') ||
+    lower.endsWith('_val') ||
+    lower.includes('ပမာဏ') ||
+    lower.includes('ငွေပမာဏ') ||
+    lower.includes('ကျသင့်ငွေ') ||
+    lower.includes('တန်ဖိုး') ||
+    lower.includes('ကြေး')
+  ) {
+    return true;
+  }
+
+  // Check if column is strictly 'total' or 'sum' or 'net' or 'gross'
+  if (lower === 'total' || lower === 'sum' || lower === 'net' || lower === 'gross') {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Formats an amount value with commas and decimals, optionally applying minor unit division (/100)
+ */
+export function formatAmountValue(val: any, divideBy100: boolean = false): string {
+  if (val === null || val === undefined || String(val).trim() === '') return '';
+  const num = parseAmount(val);
+  if (num === null || isNaN(num)) return String(val);
+
+  const effectiveNum = divideBy100 ? num / 100 : num;
+  const hasDecimals = !Number.isInteger(effectiveNum);
+
+  return effectiveNum.toLocaleString('en-US', {
+    minimumFractionDigits: divideBy100 || hasDecimals ? 2 : 0,
+    maximumFractionDigits: 2,
+  });
+}

@@ -17,7 +17,7 @@ import {
   Calculator,
   Sigma,
 } from 'lucide-react';
-import { parseAmount } from '../utils/numberUtils';
+import { parseAmount, isAmountColumn, formatAmountValue } from '../utils/numberUtils';
 import { detectColumnMode } from '../utils/searchMatcher';
 
 interface ColumnSummary {
@@ -39,6 +39,8 @@ interface ResultsTableProps {
   onSelectRow: (row: Record<string, any>) => void;
   fileName: string;
   activeSheetName: string;
+  divideBy100?: boolean;
+  onToggleDivideBy100?: (checked: boolean) => void;
 }
 
 export const ResultsTable: React.FC<ResultsTableProps> = ({
@@ -52,6 +54,8 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
   onSelectRow,
   fileName,
   activeSheetName,
+  divideBy100 = false,
+  onToggleDivideBy100,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -154,136 +158,6 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
   };
   const pageNumbers = getPageNumbers();
 
-  // Identify columns that represent financial amounts, fees, balances or monetary values
-  const isAmountColumn = (colName: string): boolean => {
-    if (!colName) return false;
-    const lower = colName.toLowerCase().trim();
-
-    // 0. Definite CURRENCY CODE exclusion:
-    // Columns containing '_cur', 'cur_', currency codes/names (e.g. OPER_AMOUNT_CUR, STTL_AMOUNT_CUR, CURRENCY)
-    // are currency identifiers (e.g. 104 = MMK, 840 = USD) and must NEVER be totaled.
-    if (
-      lower.includes('_cur') ||
-      lower.includes('cur_') ||
-      lower.endsWith('_cur') ||
-      lower.endsWith('-cur') ||
-      lower.endsWith('.cur') ||
-      lower.includes('_curr') ||
-      lower.includes('curr_') ||
-      lower.includes('currency') ||
-      lower.includes('_ccy') ||
-      lower.includes('ccy_') ||
-      lower === 'cur' ||
-      lower === 'curr' ||
-      lower === 'ccy' ||
-      /\bcur\b/i.test(colName) ||
-      /\bcurr\b/i.test(colName) ||
-      /\bccy\b/i.test(colName) ||
-      /\bcurrency\b/i.test(colName)
-    ) {
-      return false;
-    }
-
-    // 1. Definite NON-amount column patterns:
-    // Dates, Times, Timestamps
-    if (
-      lower.includes('date') ||
-      lower.includes('time') ||
-      lower.includes('timestamp') ||
-      lower.includes('year') ||
-      lower.includes('month') ||
-      lower.includes('day')
-    ) {
-      return false;
-    }
-
-    // Identifiers, References, Codes, Party, Names, Types, Statuses, Accounts, Phones, NRC
-    if (
-      lower.includes('id') ||
-      lower.includes('ref') ||
-      lower.includes('party') ||
-      lower.includes('account') ||
-      lower.includes('phone') ||
-      lower.includes('mobile') ||
-      lower.includes('tel') ||
-      lower.includes('nrc') ||
-      lower.includes('card') ||
-      lower.includes('pan') ||
-      lower.includes('terminal') ||
-      lower.includes('auth') ||
-      lower.includes('trace') ||
-      lower.includes('rrn') ||
-      lower.includes('stan') ||
-      lower.includes('seq') ||
-      lower.includes('code') ||
-      lower.includes('token') ||
-      lower.includes('batch') ||
-      lower.includes('type') ||
-      lower.includes('mode') ||
-      lower.includes('status') ||
-      lower.includes('channel') ||
-      lower.includes('name') ||
-      lower.includes('merchant') ||
-      lower.includes('customer') ||
-      lower.includes('user') ||
-      lower.includes('agent') ||
-      lower.includes('branch') ||
-      lower.includes('desc') ||
-      lower.includes('description') ||
-      lower.includes('remark') ||
-      lower.includes('note')
-    ) {
-      // Allow ONLY if the column name EXPLICITLY specifies an amount keyword
-      // (e.g. 'receiver amount', 'transaction amount', 'dps fee')
-      if (
-        lower.includes('amount') ||
-        lower.includes('amt') ||
-        lower.includes('fee') ||
-        lower.includes('expense') ||
-        lower.endsWith('_val')
-      ) {
-        return true;
-      }
-      return false;
-    }
-
-    // 2. Definite AMOUNT keywords
-    if (
-      lower.includes('amount') ||
-      lower.includes('amt') ||
-      lower.includes('fee') ||
-      lower.includes('fees') ||
-      lower.includes('expense') ||
-      lower.includes('expenses') ||
-      lower.includes('mdr') ||
-      lower.includes('price') ||
-      lower.includes('cost') ||
-      lower.includes('charge') ||
-      lower.includes('balance') ||
-      lower.includes('salary') ||
-      lower.includes('commission') ||
-      lower.includes('bonus') ||
-      lower.includes('refund') ||
-      lower.startsWith('add_ampr') ||
-      lower.includes('ampr') ||
-      lower.endsWith('_val') ||
-      lower.includes('ပမာဏ') ||
-      lower.includes('ငွေပမာဏ') ||
-      lower.includes('ကျသင့်ငွေ') ||
-      lower.includes('တန်ဖိုး') ||
-      lower.includes('ကြေး')
-    ) {
-      return true;
-    }
-
-    // Check if column is strictly 'total' or 'sum' or 'net' or 'gross'
-    if (lower === 'total' || lower === 'sum' || lower === 'net' || lower === 'gross') {
-      return true;
-    }
-
-    return false;
-  };
-
   // Calculate sum and count STRICTLY for amount columns across all matched results
   const columnTotals = useMemo(() => {
     const totals: Record<string, ColumnSummary> = {};
@@ -306,8 +180,11 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
           continue;
         }
 
-        const num = parseAmount(val);
+        let num = parseAmount(val);
         if (num !== null && !isNaN(num)) {
+          if (divideBy100) {
+            num = num / 100;
+          }
           sum += num;
           numericCount++;
           if (!Number.isInteger(num)) {
@@ -320,7 +197,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
       if (numericCount > 0) {
         const cleanSum = Math.round((sum + Number.EPSILON) * 1000) / 1000;
         const formatted =
-          hasDecimals || !Number.isInteger(cleanSum)
+          divideBy100 || hasDecimals || !Number.isInteger(cleanSum)
             ? cleanSum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
             : cleanSum.toLocaleString('en-US');
 
@@ -335,7 +212,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
     }
 
     return totals;
-  }, [results, displayColumns]);
+  }, [results, displayColumns, divideBy100]);
 
   // List of primary amount columns for the bottom summary cards
   const amountSummaryList = useMemo(() => {
@@ -351,7 +228,12 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
             const cleanRow: Record<string, any> = {};
             for (const [key, val] of Object.entries(r)) {
               if (!key.startsWith('_')) {
-                cleanRow[key] = val;
+                if (divideBy100 && isAmountColumn(key) && val !== null && val !== undefined && String(val).trim() !== '') {
+                  const num = parseAmount(val);
+                  cleanRow[key] = num !== null && !isNaN(num) ? num / 100 : val;
+                } else {
+                  cleanRow[key] = val;
+                }
               }
             }
             return {
@@ -364,7 +246,12 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
             const cleanRow: Record<string, any> = {};
             for (const [key, val] of Object.entries(item.row)) {
               if (!key.startsWith('_')) {
-                cleanRow[key] = val;
+                if (divideBy100 && isAmountColumn(key) && val !== null && val !== undefined && String(val).trim() !== '') {
+                  const num = parseAmount(val);
+                  cleanRow[key] = num !== null && !isNaN(num) ? num / 100 : val;
+                } else {
+                  cleanRow[key] = val;
+                }
               }
             }
             return {
@@ -428,9 +315,41 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
   // Cell highlight renderer
   const renderCellContent = (col: string, val: any, item: MatchResult) => {
     const textVal = val !== null && val !== undefined ? String(val) : '';
+    const isAmtCol = isAmountColumn(col);
     const isTargetCol =
       col === selectedColumn ||
       (selectedColumn === ALL_COLUMNS_KEY && col === item.matchedColumn);
+
+    // If divideBy100 is active and this is an amount column, format with /100 and 2 decimals
+    if (divideBy100 && isAmtCol && val !== null && val !== undefined && String(val).trim() !== '') {
+      const num = parseAmount(val);
+      if (num !== null && !isNaN(num)) {
+        const formattedAmount = (num / 100).toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+
+        if (isTargetCol) {
+          return (
+            <span
+              className="font-mono font-bold text-blue-900 bg-blue-50/90 px-1.5 py-0.5 rounded border border-blue-200"
+              title={`Original raw: ${textVal} (divided by 100: ${formattedAmount})`}
+            >
+              {formattedAmount}
+            </span>
+          );
+        }
+
+        return (
+          <span
+            className="font-mono text-slate-800 font-medium"
+            title={`Original raw: ${textVal} (divided by 100: ${formattedAmount})`}
+          >
+            {formattedAmount}
+          </span>
+        );
+      }
+    }
 
     if (!isTargetCol || !searchQuery) {
       return <span>{textVal}</span>;
@@ -498,6 +417,33 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
           }`}>
             {results.length.toLocaleString()} {results.length === 1 ? 'row' : 'rows'}
           </span>
+
+          {/* Amount Decimal /100 Checkbox Toggle in Table Header */}
+          {onToggleDivideBy100 && (
+            <label
+              id="checkbox-minor-units-table-header"
+              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-medium cursor-pointer select-none transition-all ${
+                divideBy100
+                  ? 'bg-emerald-100/90 border-emerald-300 text-emerald-950 font-bold shadow-2xs ring-1 ring-emerald-400/40'
+                  : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+              }`}
+              title="OPER_REQUEST_AMOUNT_VAL, STTL_AMOUNT_VAL နှင့် အခြား Amount Column များ၏ နောက်ဆုံးဂဏန်း ၂ လုံးကို ဒသမဖြတ်ရန် (/100) - ဥပမာ 6405000 → 64,050.00"
+            >
+              <input
+                type="checkbox"
+                id="input-divide-by-100-table"
+                checked={divideBy100}
+                onChange={(e) => onToggleDivideBy100(e.target.checked)}
+                className="rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
+              />
+              <span className="whitespace-nowrap flex items-center gap-1">
+                <span>Amount ဒသမ ၂ လုံးဖြတ်</span>
+                <span className="font-mono text-[10px] bg-emerald-200 text-emerald-900 px-1 py-0.2 rounded font-bold">
+                  .00 (/100)
+                </span>
+              </span>
+            </label>
+          )}
         </div>
 
         {/* Top Header Quick Controls */}
@@ -925,6 +871,11 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
             <div className="flex items-center gap-1.5 text-emerald-950 font-bold">
               <Calculator className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
               <span>Result Amounts Total (ရလဒ် စုစုပေါင်း ပမာဏ):</span>
+              {divideBy100 && (
+                <span className="text-[10px] font-mono bg-emerald-200/90 text-emerald-900 px-1.5 py-0.5 rounded font-bold border border-emerald-300">
+                  .00 (/100 အမှန်တကယ်ငွေကြေး)
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-1.5 flex-wrap">

@@ -16,6 +16,8 @@ interface SearchControlProps {
   onSearchChange: (query: string) => void;
   totalRows: number;
   matchedCount: number;
+  divideBy100?: boolean;
+  onToggleDivideBy100?: (checked: boolean) => void;
 }
 
 export const SearchControl: React.FC<SearchControlProps> = ({
@@ -31,6 +33,8 @@ export const SearchControl: React.FC<SearchControlProps> = ({
   onSearchChange,
   totalRows,
   matchedCount,
+  divideBy100 = false,
+  onToggleDivideBy100,
 }) => {
   const [showModeOverride, setShowModeOverride] = useState(false);
 
@@ -261,7 +265,34 @@ export const SearchControl: React.FC<SearchControlProps> = ({
         </div>
 
         {/* Right Side: Rule Badge & Override Toggle */}
-        <div className="flex items-center gap-1.5 shrink-0 justify-end">
+        <div className="flex items-center gap-1.5 shrink-0 justify-end flex-wrap">
+          {/* Divide by 100 Checkbox at top */}
+          {onToggleDivideBy100 && (
+            <label
+              id="checkbox-minor-units-search"
+              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-xs font-medium cursor-pointer select-none transition-all ${
+                divideBy100
+                  ? 'bg-emerald-100/80 border-emerald-300 text-emerald-950 font-bold shadow-2xs ring-1 ring-emerald-400/40'
+                  : 'bg-slate-50 hover:bg-slate-100 border-slate-300 text-slate-700'
+              }`}
+              title="OPER_REQUEST_AMOUNT_VAL, STTL_AMOUNT_VAL စသည့် Amount Column များ၏ နောက်ဆုံးဂဏန်း ၂ လုံးကို ဒသမဖြတ်ရန် (/100)"
+            >
+              <input
+                type="checkbox"
+                id="input-divide-by-100-search"
+                checked={divideBy100}
+                onChange={(e) => onToggleDivideBy100(e.target.checked)}
+                className="rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
+              />
+              <span className="whitespace-nowrap flex items-center gap-1 text-[11px]">
+                <span>Amount ဒသမ ၂ လုံးဖြတ်</span>
+                <span className="font-mono text-[10px] bg-emerald-200/90 text-emerald-900 px-1 py-0.2 rounded font-bold">
+                  /100
+                </span>
+              </span>
+            </label>
+          )}
+
           <div
             id="active-rule-badge"
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${currentBadge.badgeClass}`}
